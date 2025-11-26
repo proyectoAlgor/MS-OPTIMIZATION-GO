@@ -7,9 +7,9 @@ import (
 
 // OptimizationService provides business logic for optimization algorithms
 type OptimizationService struct {
-	moneyAlgo   *algorithms.MoneyChangeAlgorithm
-	sortingAlgo *algorithms.SortingAlgorithm
-	searchAlgo  *algorithms.SearchAlgorithm
+	moneyAlgo       *algorithms.MoneyChangeAlgorithm
+	knapsackAlgo    *algorithms.KnapsackAlgorithm
+	tableAssignAlgo *algorithms.TableAssignmentAlgorithm
 }
 
 // NewOptimizationService creates a new optimization service
@@ -18,9 +18,9 @@ func NewOptimizationService() *OptimizationService {
 	coins := []int{5000, 2000, 1000, 500, 200, 100, 50, 25, 10, 5, 1} // $50, $20, $10, $5, $2, $1, $0.50, $0.25, $0.10, $0.05, $0.01
 
 	return &OptimizationService{
-		moneyAlgo:   algorithms.NewMoneyChangeAlgorithm(coins),
-		sortingAlgo: algorithms.NewSortingAlgorithm(),
-		searchAlgo:  algorithms.NewSearchAlgorithm(),
+		moneyAlgo:       algorithms.NewMoneyChangeAlgorithm(coins),
+		knapsackAlgo:    algorithms.NewKnapsackAlgorithm(),
+		tableAssignAlgo: algorithms.NewTableAssignmentAlgorithm(),
 	}
 }
 
@@ -96,182 +96,108 @@ func (os *OptimizationService) formatCoins(coins []int) []string {
 	return formatted
 }
 
-// SortProductsRequest represents a request to sort products
-type SortProductsRequest struct {
-	Products  []algorithms.Product `json:"products"`
-	SortBy    string               `json:"sort_by"`   // price_asc, price_desc, name_asc, name_desc, code_asc, category_asc
-	Algorithm string               `json:"algorithm"` // quick, insertion, selection
+// OptimizeInventoryRequest represents a request to optimize inventory
+type OptimizeInventoryRequest struct {
+	Items          []algorithms.InventoryItem `json:"items"`
+	MaxCapacity    float64                    `json:"max_capacity"`
+	MinDemandScore float64                    `json:"min_demand_score,omitempty"`
+	Algorithm      string                     `json:"algorithm"` // "dp" (dynamic programming) or "greedy"
 }
 
-// SortProductsResponse represents the response for sorting products
-type SortProductsResponse struct {
-	Success   bool                 `json:"success"`
-	Products  []algorithms.Product `json:"products"`
-	Message   string               `json:"message"`
-	Algorithm string               `json:"algorithm_used"`
+// OptimizeInventoryResponse represents the response for inventory optimization
+type OptimizeInventoryResponse struct {
+	Success bool                      `json:"success"`
+	Result  algorithms.KnapsackResult `json:"result"`
+	Message string                    `json:"message"`
 }
 
-// SortProducts sorts products using the specified algorithm
-func (os *OptimizationService) SortProducts(req SortProductsRequest) SortProductsResponse {
-	if len(req.Products) == 0 {
-		return SortProductsResponse{
-			Success:   false,
-			Message:   "No products provided",
-			Algorithm: req.Algorithm,
-		}
-	}
-
-	var sortedProducts []algorithms.Product
-	var message string
-
-	switch req.Algorithm {
-	case "quick":
-		sortedProducts = os.sortingAlgo.QuickSortProducts(req.Products, req.SortBy)
-		message = "Products sorted using Quick Sort algorithm"
-	case "insertion":
-		sortedProducts = os.sortingAlgo.InsertionSortProducts(req.Products, req.SortBy)
-		message = "Products sorted using Insertion Sort algorithm (optimal for small lists)"
-	case "selection":
-		sortedProducts = os.sortingAlgo.SelectionSortProducts(req.Products, req.SortBy)
-		message = "Products sorted using Selection Sort algorithm"
-	default:
-		// Default to quick sort
-		sortedProducts = os.sortingAlgo.QuickSortProducts(req.Products, req.SortBy)
-		message = "Products sorted using Quick Sort algorithm (default)"
-	}
-
-	return SortProductsResponse{
-		Success:   true,
-		Products:  sortedProducts,
-		Message:   message,
-		Algorithm: req.Algorithm,
-	}
-}
-
-// SearchProductsRequest represents a request to search products
-type SearchProductsRequest struct {
-	Products   []algorithms.Product `json:"products"`
-	SearchType string               `json:"search_type"` // name, code, price_range, price_exact
-	SearchTerm string               `json:"search_term"`
-	MinPrice   *float64             `json:"min_price,omitempty"`
-	MaxPrice   *float64             `json:"max_price,omitempty"`
-	ExactPrice *float64             `json:"exact_price,omitempty"`
-}
-
-// SearchProductsResponse represents the response for searching products
-type SearchProductsResponse struct {
-	Success  bool                 `json:"success"`
-	Products []algorithms.Product `json:"products"`
-	Message  string               `json:"message"`
-	Total    float64              `json:"total_value,omitempty"`
-}
-
-// SearchProducts searches for products using various algorithms
-func (os *OptimizationService) SearchProducts(req SearchProductsRequest) SearchProductsResponse {
-	if len(req.Products) == 0 {
-		return SearchProductsResponse{
+// OptimizeInventory optimizes inventory selection using Knapsack algorithm
+func (os *OptimizationService) OptimizeInventory(req OptimizeInventoryRequest) OptimizeInventoryResponse {
+	if len(req.Items) == 0 {
+		return OptimizeInventoryResponse{
 			Success: false,
-			Message: "No products provided",
+			Message: "No items provided",
 		}
 	}
 
-	var result []algorithms.Product
-	var message string
-
-	switch req.SearchType {
-	case "name":
-		result = os.searchAlgo.SearchProductsByName(req.Products, req.SearchTerm)
-		message = fmt.Sprintf("Found %d products matching name '%s'", len(result), req.SearchTerm)
-	case "code":
-		product := os.searchAlgo.SearchProductsByCode(req.Products, req.SearchTerm)
-		if product != nil {
-			result = []algorithms.Product{*product}
-			message = fmt.Sprintf("Found product with code '%s'", req.SearchTerm)
-		} else {
-			result = []algorithms.Product{}
-			message = fmt.Sprintf("No product found with code '%s'", req.SearchTerm)
-		}
-	case "price_range":
-		if req.MinPrice != nil && req.MaxPrice != nil {
-			result = os.searchAlgo.BinarySearchProductsByPriceRange(req.Products, *req.MinPrice, *req.MaxPrice)
-			message = fmt.Sprintf("Found %d products in price range $%.2f - $%.2f", len(result), *req.MinPrice, *req.MaxPrice)
-		} else {
-			return SearchProductsResponse{
-				Success: false,
-				Message: "MinPrice and MaxPrice are required for price range search",
-			}
-		}
-	case "price_exact":
-		if req.ExactPrice != nil {
-			searchResult := os.searchAlgo.BinarySearchProducts(req.Products, *req.ExactPrice)
-			if searchResult.Found {
-				// We need to get the actual product from the original list
-				// Since binary search returns the index from sorted list
-				message = searchResult.Message
-			} else {
-				result = []algorithms.Product{}
-				message = searchResult.Message
-			}
-		} else {
-			return SearchProductsResponse{
-				Success: false,
-				Message: "ExactPrice is required for exact price search",
-			}
-		}
-	default:
-		return SearchProductsResponse{
+	if req.MaxCapacity <= 0 {
+		return OptimizeInventoryResponse{
 			Success: false,
-			Message: "Invalid search type. Supported types: name, code, price_range, price_exact",
+			Message: "Invalid capacity (must be > 0)",
 		}
 	}
 
-	total := os.searchAlgo.SumProductPrices(result)
-
-	return SearchProductsResponse{
-		Success:  true,
-		Products: result,
-		Message:  message,
-		Total:    total,
+	minDemandScore := req.MinDemandScore
+	if minDemandScore < 0 {
+		minDemandScore = 0
 	}
-}
 
-// AnalyzeOrderRequest represents a request to analyze an order
-type AnalyzeOrderRequest struct {
-	Products []algorithms.Product `json:"products"`
-}
-
-// AnalyzeOrderResponse represents the response for order analysis
-type AnalyzeOrderResponse struct {
-	Success        bool                `json:"success"`
-	Total          float64             `json:"total"`
-	TotalRecursive float64             `json:"total_recursive"`
-	ProductCount   int                 `json:"product_count"`
-	MostExpensive  *algorithms.Product `json:"most_expensive_product,omitempty"`
-	Cheapest       *algorithms.Product `json:"cheapest_product,omitempty"`
-	Message        string              `json:"message"`
-}
-
-// AnalyzeOrder analyzes an order using various algorithms
-func (os *OptimizationService) AnalyzeOrder(req AnalyzeOrderRequest) AnalyzeOrderResponse {
-	if len(req.Products) == 0 {
-		return AnalyzeOrderResponse{
+	var result algorithms.KnapsackResult
+	if req.Algorithm == "dp" {
+		// Use dynamic programming for exact solution
+		result = os.knapsackAlgo.SolveKnapsack01(req.Items, req.MaxCapacity)
+	} else if req.Algorithm == "greedy" || req.Algorithm == "" {
+		// Use greedy approach for faster results
+		if minDemandScore > 0 {
+			result = os.knapsackAlgo.OptimizeInventory(req.Items, req.MaxCapacity, minDemandScore)
+		} else {
+			result = os.knapsackAlgo.SolveKnapsackGreedy(req.Items, req.MaxCapacity)
+		}
+	} else {
+		return OptimizeInventoryResponse{
 			Success: false,
-			Message: "No products in order",
+			Message: "Invalid algorithm. Supported: 'dp' (dynamic programming) or 'greedy'",
 		}
 	}
 
-	total := os.searchAlgo.SumProductPrices(req.Products)
-	totalRecursive := os.searchAlgo.SumProductPricesRecursive(req.Products)
-	mostExpensive := os.searchAlgo.FindMostExpensiveProduct(req.Products)
-	cheapest := os.searchAlgo.FindCheapestProduct(req.Products)
+	return OptimizeInventoryResponse{
+		Success: true,
+		Result:  result,
+		Message: fmt.Sprintf("Inventory optimized: %d items selected", len(result.SelectedItems)),
+	}
+}
 
-	return AnalyzeOrderResponse{
-		Success:        true,
-		Total:          total,
-		TotalRecursive: totalRecursive,
-		ProductCount:   len(req.Products),
-		MostExpensive:  mostExpensive,
-		Cheapest:       cheapest,
-		Message:        fmt.Sprintf("Order analyzed: %d products, total $%.2f", len(req.Products), total),
+// AssignTablesRequest represents a request to assign tables to customer groups
+type AssignTablesRequest struct {
+	Tables []algorithms.TableAssignment `json:"tables"`
+	Groups []algorithms.CustomerGroup   `json:"groups"`
+	Method string                       `json:"method"` // "greedy" or "optimal"
+}
+
+// AssignTablesResponse represents the response for table assignment
+type AssignTablesResponse struct {
+	Success bool                        `json:"success"`
+	Result  algorithms.AssignmentResult `json:"result"`
+	Message string                      `json:"message"`
+}
+
+// AssignTables assigns tables to customer groups using optimization algorithms
+func (os *OptimizationService) AssignTables(req AssignTablesRequest) AssignTablesResponse {
+	if len(req.Tables) == 0 {
+		return AssignTablesResponse{
+			Success: false,
+			Message: "No tables provided",
+		}
+	}
+
+	if len(req.Groups) == 0 {
+		return AssignTablesResponse{
+			Success: false,
+			Message: "No customer groups provided",
+		}
+	}
+
+	var result algorithms.AssignmentResult
+	if req.Method == "optimal" {
+		result = os.tableAssignAlgo.AssignTablesOptimal(req.Tables, req.Groups)
+	} else {
+		// Default to greedy (faster and usually good enough)
+		result = os.tableAssignAlgo.AssignTablesGreedy(req.Tables, req.Groups)
+	}
+
+	return AssignTablesResponse{
+		Success: true,
+		Result:  result,
+		Message: result.Message,
 	}
 }

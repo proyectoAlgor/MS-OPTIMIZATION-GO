@@ -37,21 +37,17 @@ func main() {
 	// API routes
 	api := r.Group("/api/optimization")
 	{
-		// Algorithm information endpoints
-		api.GET("/coins", optimizationHandler.GetAvailableCoins)
+		// Algorithm information endpoint
 		api.GET("/algorithms", optimizationHandler.GetSupportedAlgorithms)
 
-		// Money change algorithm
+		// Money change algorithm (used for cash payments)
 		api.POST("/change", optimizationHandler.CalculateChange)
 
-		// Sorting algorithms
-		api.POST("/sort/products", optimizationHandler.SortProducts)
+		// Inventory optimization (Knapsack algorithm)
+		api.POST("/inventory/optimize", optimizationHandler.OptimizeInventory)
 
-		// Search algorithms
-		api.POST("/search/products", optimizationHandler.SearchProducts)
-
-		// Order analysis
-		api.POST("/analyze/order", optimizationHandler.AnalyzeOrder)
+		// Table assignment optimization (Greedy algorithm)
+		api.POST("/tables/assign", optimizationHandler.AssignTables)
 	}
 
 	// Start server

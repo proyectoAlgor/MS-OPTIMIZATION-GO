@@ -26,8 +26,8 @@ func (h *OptimizationHandler) HealthCheck(c *gin.Context) {
 		"status":  "healthy",
 		"algorithms": []string{
 			"money_change",
-			"sorting",
-			"search",
+			"knapsack",
+			"table_assignment",
 		},
 	})
 }
@@ -64,136 +64,6 @@ func (h *OptimizationHandler) CalculateChange(c *gin.Context) {
 	c.JSON(status, result)
 }
 
-// SortProducts handles product sorting requests
-func (h *OptimizationHandler) SortProducts(c *gin.Context) {
-	var req service.SortProductsRequest
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Invalid request format",
-			"details": err.Error(),
-		})
-		return
-	}
-
-	// Validate sort criteria
-	validSortBy := map[string]bool{
-		"price_asc":    true,
-		"price_desc":   true,
-		"name_asc":     true,
-		"name_desc":    true,
-		"code_asc":     true,
-		"category_asc": true,
-	}
-
-	if !validSortBy[req.SortBy] {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success":       false,
-			"error":         "Invalid sort criteria",
-			"valid_options": []string{"price_asc", "price_desc", "name_asc", "name_desc", "code_asc", "category_asc"},
-		})
-		return
-	}
-
-	// Validate algorithm
-	validAlgorithms := map[string]bool{
-		"quick":     true,
-		"insertion": true,
-		"selection": true,
-	}
-
-	if !validAlgorithms[req.Algorithm] {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success":       false,
-			"error":         "Invalid algorithm",
-			"valid_options": []string{"quick", "insertion", "selection"},
-		})
-		return
-	}
-
-	result := h.optimizationService.SortProducts(req)
-
-	status := http.StatusOK
-	if !result.Success {
-		status = http.StatusBadRequest
-	}
-
-	c.JSON(status, result)
-}
-
-// SearchProducts handles product search requests
-func (h *OptimizationHandler) SearchProducts(c *gin.Context) {
-	var req service.SearchProductsRequest
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Invalid request format",
-			"details": err.Error(),
-		})
-		return
-	}
-
-	// Validate search type
-	validSearchTypes := map[string]bool{
-		"name":        true,
-		"code":        true,
-		"price_range": true,
-		"price_exact": true,
-	}
-
-	if !validSearchTypes[req.SearchType] {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success":       false,
-			"error":         "Invalid search type",
-			"valid_options": []string{"name", "code", "price_range", "price_exact"},
-		})
-		return
-	}
-
-	result := h.optimizationService.SearchProducts(req)
-
-	status := http.StatusOK
-	if !result.Success {
-		status = http.StatusBadRequest
-	}
-
-	c.JSON(status, result)
-}
-
-// AnalyzeOrder handles order analysis requests
-func (h *OptimizationHandler) AnalyzeOrder(c *gin.Context) {
-	var req service.AnalyzeOrderRequest
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Invalid request format",
-			"details": err.Error(),
-		})
-		return
-	}
-
-	result := h.optimizationService.AnalyzeOrder(req)
-
-	status := http.StatusOK
-	if !result.Success {
-		status = http.StatusBadRequest
-	}
-
-	c.JSON(status, result)
-}
-
-// GetAvailableCoins returns the available coin denominations
-func (h *OptimizationHandler) GetAvailableCoins(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"coins":   []string{"$50.00", "$20.00", "$10.00", "$5.00", "$2.00", "$1.00", "$0.50", "$0.25", "$0.10", "$0.05", "$0.01"},
-		"message": "Available coin denominations for change calculation",
-	})
-}
-
 // GetSupportedAlgorithms returns information about supported algorithms
 func (h *OptimizationHandler) GetSupportedAlgorithms(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
@@ -204,27 +74,117 @@ func (h *OptimizationHandler) GetSupportedAlgorithms(c *gin.Context) {
 				"complexity":  "O(n log n) for sorting + O(n) for processing",
 				"use_case":    "Calculate optimal change when customer pays in cash",
 			},
-			"sorting": gin.H{
-				"description": "Various sorting algorithms for products and data",
-				"algorithms":  []string{"quick_sort", "insertion_sort", "selection_sort"},
+			"knapsack": gin.H{
+				"description": "0/1 Knapsack and Fractional Knapsack algorithms for inventory optimization",
+				"algorithms":  []string{"dynamic_programming", "greedy"},
 				"complexity": gin.H{
-					"quick_sort":     "O(n log n) average, O(n²) worst case",
-					"insertion_sort": "O(n²) average, O(n) best case",
-					"selection_sort": "O(n²) in all cases",
+					"dynamic_programming": "O(n * capacity) - exact solution",
+					"greedy":              "O(n log n) - approximate solution, faster",
 				},
-				"use_case": "Sort products by price, name, category, etc.",
+				"use_case": "Optimize which products to keep in stock considering space, demand, and cost",
 			},
-			"search": gin.H{
-				"description": "Search algorithms for finding products and data",
-				"algorithms":  []string{"binary_search", "linear_search", "string_reversal"},
+			"table_assignment": gin.H{
+				"description": "Greedy algorithm for optimal table assignment to customer groups",
+				"algorithms":  []string{"greedy", "optimal"},
 				"complexity": gin.H{
-					"binary_search":   "O(log n)",
-					"linear_search":   "O(n)",
-					"string_reversal": "O(n)",
+					"greedy":  "O(n * m) where n = groups, m = tables - fast and efficient",
+					"optimal": "O(n³) - optimal solution but slower",
 				},
-				"use_case": "Find products by name, code, price range",
+				"use_case": "Assign tables to customers considering capacity, proximity, and priority",
 			},
 		},
 		"message": "Supported optimization algorithms for bar management",
 	})
+}
+
+// OptimizeInventory handles inventory optimization requests using Knapsack algorithm
+func (h *OptimizationHandler) OptimizeInventory(c *gin.Context) {
+	var req service.OptimizeInventoryRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid request format",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Validate request
+	if req.MaxCapacity <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Max capacity must be greater than 0",
+		})
+		return
+	}
+
+	// Validate algorithm
+	if req.Algorithm != "" && req.Algorithm != "dp" && req.Algorithm != "greedy" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success":       false,
+			"error":         "Invalid algorithm",
+			"valid_options": []string{"dp", "greedy"},
+		})
+		return
+	}
+
+	result := h.optimizationService.OptimizeInventory(req)
+
+	status := http.StatusOK
+	if !result.Success {
+		status = http.StatusBadRequest
+	}
+
+	c.JSON(status, result)
+}
+
+// AssignTables handles table assignment optimization requests
+func (h *OptimizationHandler) AssignTables(c *gin.Context) {
+	var req service.AssignTablesRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid request format",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Validate request
+	if len(req.Tables) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "No tables provided",
+		})
+		return
+	}
+
+	if len(req.Groups) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "No customer groups provided",
+		})
+		return
+	}
+
+	// Validate method
+	if req.Method != "" && req.Method != "greedy" && req.Method != "optimal" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success":       false,
+			"error":         "Invalid method",
+			"valid_options": []string{"greedy", "optimal"},
+		})
+		return
+	}
+
+	result := h.optimizationService.AssignTables(req)
+
+	status := http.StatusOK
+	if !result.Success {
+		status = http.StatusBadRequest
+	}
+
+	c.JSON(status, result)
 }
